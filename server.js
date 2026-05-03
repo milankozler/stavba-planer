@@ -29,8 +29,11 @@ const DEFAULT_DATA = {
   ],
   // assignments: { "0_2026-05-04": { am: 0, pm: 1 } }
   assignments: {},
-  // todos: [{ id, text, done, createdAt, doneAt }]
-  todos: []
+  // todos: [{ id, text, done, createdAt, doneAt, assignees: [string] }]
+  todos: [],
+  // Oddělený seznam řešitelů úkolů (nezávislý na workers v plánu)
+  // assignees: ['Honza', 'Pavel', ...]
+  assignees: []
 };
 
 function loadData() {
@@ -38,6 +41,11 @@ function loadData() {
     if (fs.existsSync(DATA_FILE)) {
       const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
       if (!Array.isArray(data.todos)) data.todos = [];
+      if (!Array.isArray(data.assignees)) data.assignees = [];
+      // Migrace: doplň assignees:[] do existujících todos
+      data.todos.forEach(t => {
+        if (!Array.isArray(t.assignees)) t.assignees = [];
+      });
       return data;
     }
   } catch (e) {
@@ -73,7 +81,8 @@ app.post('/api/save', (req, res) => {
       workers: data.workers,
       stavby: data.stavby,
       assignments: data.assignments,
-      todos: current.todos || []
+      todos: current.todos || [],
+      assignees: current.assignees || []
     };
     saveData(merged);
     res.json({ ok: true });
@@ -94,9 +103,9 @@ app.post('/api/verify', (req, res) => {
 
 // ─── TODO ENDPOINTY ────────────────────────────────────────
 
-// Veřejně: přidat úkol
+// Veřejně: přidat úkol (s volitelnými řešiteli)
 app.post('/api/todos/add', (req, res) => {
-  const { text } = req.body || {};
+  const { text, assignees } = req.body || {};
   if (!text || typeof text !== 'string' || !text.trim()) {
     return res.status(400).json({ error: 'Prázdný text úkolu' });
   }
@@ -106,11 +115,22 @@ app.post('/api/todos/add', (req, res) => {
     if (data.todos.length >= 100) {
       return res.status(400).json({ error: 'Příliš mnoho úkolů (max 100)' });
     }
+    // Sanitize assignees: pole stringů, max 10
+    let cleanAssignees = [];
+    if (Array.isArray(assignees)) {
+      cleanAssignees = assignees
+        .filter(a => typeof a === 'string' && a.trim())
+        .map(a => a.trim().slice(0, 60))
+        .slice(0, 10);
+      // Dedupe
+      cleanAssignees = [...new Set(cleanAssignees)];
+    }
     const todo = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       text: text.trim().slice(0, 300),
       done: false,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      assignees: cleanAssignees
     };
     data.todos.push(todo);
     saveData(data);
@@ -186,6 +206,71 @@ app.post('/api/todos/clearDone', (req, res) => {
     data.todos = (data.todos || []).filter(t => !t.done);
     saveData(data);
     res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Chyba: ' + e.message });
+  }
+});
+
+// Veřejně: aktualizovat řešitele konkrétního úkolu
+app.post('/api/todos/setAssignees', (req, res) => {
+  const { id, assignees } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'Chybí ID' });
+  if (!Array.isArray(assignees)) return res.status(400).json({ error: 'assignees musí být pole' });
+  try {
+    const data = loadData();
+    const todo = (data.todos || []).find(t => t.id === id);
+    if (!todo) return res.status(404).json({ error: 'Úkol nenalezen' });
+    let clean = assignees
+      .filter(a => typeof a === 'string' && a.trim())
+      .map(a => a.trim().slice(0, 60))
+      .slice(0, 10);
+    clean = [...new Set(clean)];
+    todo.assignees = clean;
+    saveData(data);
+    res.json({ ok: true, todo });
+  } catch (e) {
+    res.status(500).json({ error: 'Chyba: ' + e.message });
+  }
+});
+
+// ─── ASSIGNEES (seznam řešitelů) ENDPOINTY ────────────────
+
+// Chráněně: přidat řešitele do seznamu
+app.post('/api/assignees/add', (req, res) => {
+  const { password, name } = req.body || {};
+  if (password !== PASSWORD) return res.status(401).json({ error: 'Špatné heslo' });
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: 'Prázdné jméno' });
+  }
+  const clean = name.trim().slice(0, 60);
+  try {
+    const data = loadData();
+    if (!Array.isArray(data.assignees)) data.assignees = [];
+    if (data.assignees.length >= 50) {
+      return res.status(400).json({ error: 'Maximálně 50 řešitelů' });
+    }
+    if (data.assignees.some(a => a.toLowerCase() === clean.toLowerCase())) {
+      return res.status(400).json({ error: 'Toto jméno už v seznamu je' });
+    }
+    data.assignees.push(clean);
+    saveData(data);
+    res.json({ ok: true, name: clean, assignees: data.assignees });
+  } catch (e) {
+    res.status(500).json({ error: 'Chyba: ' + e.message });
+  }
+});
+
+// Chráněně: odebrat řešitele ze seznamu
+// POZOR: stávající úkoly s tímto řešitelem si jméno zachovají (historie)
+app.post('/api/assignees/remove', (req, res) => {
+  const { password, name } = req.body || {};
+  if (password !== PASSWORD) return res.status(401).json({ error: 'Špatné heslo' });
+  if (!name) return res.status(400).json({ error: 'Chybí jméno' });
+  try {
+    const data = loadData();
+    data.assignees = (data.assignees || []).filter(a => a !== name);
+    saveData(data);
+    res.json({ ok: true, assignees: data.assignees });
   } catch (e) {
     res.status(500).json({ error: 'Chyba: ' + e.message });
   }
