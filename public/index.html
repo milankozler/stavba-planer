@@ -218,6 +218,105 @@
   .footer-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
   .footer-info { font-size: 11px; color: var(--muted); }
 
+  /* ─── TODO section ─── */
+  .todo-section {
+    margin-top: 32px;
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px;
+  }
+  .todo-header {
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .todo-header h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px; font-weight: 800; letter-spacing: -.5px;
+  }
+  .todo-counter {
+    font-size: 11px; color: var(--muted);
+  }
+  .todo-clear-btn {
+    margin-left: auto;
+    background: none; border: 1px solid var(--line); color: var(--muted);
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    padding: 4px 10px; border-radius: 3px; cursor: pointer;
+  }
+  .todo-clear-btn:hover { color: var(--err); border-color: var(--err); }
+
+  .todo-add-row {
+    display: flex; gap: 8px; margin-bottom: 14px;
+  }
+  .todo-add-row input {
+    flex: 1;
+    font-family: 'DM Mono', monospace; font-size: 13px;
+    border: 1px solid var(--line); border-radius: 4px;
+    padding: 8px 12px; background: var(--bg); color: var(--ink);
+  }
+  .todo-add-row input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
+  .todo-list { display: flex; flex-direction: column; gap: 4px; }
+
+  .todo-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    transition: background .15s;
+    border: 1px solid transparent;
+  }
+  .todo-item:hover { background: var(--bg); }
+  .todo-item.done { opacity: .55; }
+  .todo-item.done .todo-text { text-decoration: line-through; color: var(--muted); }
+
+  .todo-checkbox {
+    width: 20px; height: 20px;
+    border: 2px solid var(--line); border-radius: 4px;
+    cursor: pointer; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .12s;
+    background: var(--white);
+  }
+  .todo-checkbox:hover { border-color: var(--ink); }
+  .todo-checkbox.checked {
+    background: var(--accent); border-color: var(--accent);
+    color: #1a1814; font-weight: bold; font-size: 14px; line-height: 1;
+  }
+
+  .todo-text {
+    flex: 1; font-size: 13px; line-height: 1.4;
+    word-break: break-word;
+    cursor: default;
+  }
+  .todo-text.editable { cursor: text; }
+  .todo-text-input {
+    flex: 1;
+    font-family: 'DM Mono', monospace; font-size: 13px;
+    border: 1px solid var(--accent); border-radius: 3px;
+    padding: 4px 8px; background: var(--white); color: var(--ink);
+  }
+
+  .todo-meta {
+    font-size: 10px; color: var(--muted);
+    white-space: nowrap; flex-shrink: 0;
+  }
+
+  .todo-delete-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 16px; line-height: 1;
+    padding: 2px 6px; border-radius: 3px;
+    flex-shrink: 0;
+    transition: all .12s;
+  }
+  .todo-delete-btn:hover { color: var(--err); background: rgba(192,57,43,.1); }
+
+  .todo-empty {
+    text-align: center; padding: 20px; color: var(--muted);
+    font-size: 12px; font-style: italic;
+  }
+
+  .todo-busy { opacity: .5; pointer-events: none; }
+
   .help-text {
     font-size: 11px; color: var(--muted); margin: 8px 0 14px; font-style: italic;
   }
@@ -264,6 +363,28 @@
 <div class="footer-row">
   <span class="footer-info" id="footerInfo"></span>
   <button class="btn btn-secondary" onclick="exportCSV()" style="margin-left:auto;font-size:11px">↓ CSV</button>
+</div>
+
+<!-- TODO sekce -->
+<div class="todo-section" id="todoSection">
+  <div class="todo-header">
+    <h2>📝 Úkoly</h2>
+    <span class="todo-counter" id="todoCounter"></span>
+    <button class="todo-clear-btn" id="todoClearBtn" onclick="clearDoneTodos()" style="display:none">
+      Smazat dokončené
+    </button>
+  </div>
+  <div class="todo-add-row">
+    <input
+      type="text"
+      id="todoInput"
+      placeholder="Nový úkol… (např. Honza odveze cement na stavbu B)"
+      maxlength="300"
+      onkeydown="if(event.key==='Enter')addTodo()"
+    >
+    <button class="btn btn-primary" onclick="addTodo()">+ Přidat</button>
+  </div>
+  <div class="todo-list" id="todoList"></div>
 </div>
 
 <div class="picker" id="picker" style="display:none"></div>
@@ -319,10 +440,12 @@ async function loadData(){
     const r = await fetch('/api/data');
     appData = await r.json();
     if (!appData.assignments) appData.assignments = {};
+    if (!Array.isArray(appData.todos)) appData.todos = [];
   } catch(e){
     showToast('Nepodařilo se načíst data', true);
   }
   render();
+  renderTodos();
 }
 
 // ─── SAVE ─────────────────────────────────────────────────
@@ -402,6 +525,7 @@ function enableAdminMode(){
   unsaved = false;
   updateSaveBtn();
   render();
+  renderTodos();
 }
 
 function logout(){
@@ -415,6 +539,7 @@ function logout(){
   document.getElementById('modeBadge').textContent = 'Veřejný pohled';
   document.getElementById('pwInput').value = '';
   render();
+  renderTodos();
 }
 
 // Auto-login z session
@@ -807,7 +932,219 @@ function exportCSV(){
   a.click();
 }
 
-// Před opuštěním stránky upozorni na neuložené
+// ─── TODO ─────────────────────────────────────────────────
+function renderTodos(){
+  const list = document.getElementById('todoList');
+  const counter = document.getElementById('todoCounter');
+  const clearBtn = document.getElementById('todoClearBtn');
+  const todos = appData.todos || [];
+
+  // sort: nedokončené nahoře (od nejstaršího), pak dokončené (od nedávno hotových)
+  const sorted = [...todos].sort((a, b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    if (a.done) return new Date(b.doneAt || 0) - new Date(a.doneAt || 0);
+    return new Date(a.createdAt) - new Date(b.createdAt);
+  });
+
+  const open = todos.filter(t => !t.done).length;
+  const done = todos.filter(t => t.done).length;
+  counter.textContent = todos.length === 0
+    ? 'žádné úkoly'
+    : `${open} otevřených · ${done} hotových`;
+
+  clearBtn.style.display = (isAdmin && done > 0) ? 'inline-block' : 'none';
+
+  if (sorted.length === 0) {
+    list.innerHTML = `<div class="todo-empty">Zatím žádné úkoly. Přidej první výše ↑</div>`;
+    return;
+  }
+
+  list.innerHTML = sorted.map(t => {
+    const created = formatRelativeDate(t.createdAt);
+    const safeText = escH(t.text);
+    return `<div class="todo-item ${t.done?'done':''}" data-id="${t.id}">
+      <div class="todo-checkbox ${t.done?'checked':''}" onclick="toggleTodo('${t.id}')" title="${t.done?'Zrušit dokončení':'Označit jako hotové'}">
+        ${t.done?'✓':''}
+      </div>
+      <div class="todo-text ${isAdmin?'editable':''}" ${isAdmin?`ondblclick="startEditTodo('${t.id}')"`:''} title="${isAdmin?'Dvojklik pro úpravu':''}">${safeText}</div>
+      <span class="todo-meta">${created}</span>
+      ${isAdmin?`<button class="todo-delete-btn" onclick="deleteTodo('${t.id}')" title="Smazat">×</button>`:''}
+    </div>`;
+  }).join('');
+}
+
+function formatRelativeDate(iso){
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    const diffMs = Date.now() - d.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'teď';
+    if (diffMin < 60) return `před ${diffMin} min`;
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24) return `před ${diffH} h`;
+    const diffD = Math.floor(diffH / 24);
+    if (diffD < 7) return `před ${diffD} d`;
+    return `${d.getDate()}.${d.getMonth()+1}.`;
+  } catch(e) { return ''; }
+}
+
+async function addTodo(){
+  const inp = document.getElementById('todoInput');
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.disabled = true;
+  try {
+    const r = await fetch('/api/todos/add', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ text })
+    });
+    const res = await r.json();
+    if (r.ok) {
+      appData.todos.push(res.todo);
+      inp.value = '';
+      renderTodos();
+    } else {
+      showToast(res.error || 'Chyba', true);
+    }
+  } catch(e) {
+    showToast('Síťová chyba', true);
+  }
+  inp.disabled = false;
+  inp.focus();
+}
+
+async function toggleTodo(id){
+  const todo = appData.todos.find(t => t.id === id);
+  if (!todo) return;
+  // Optimistic update
+  const wasDone = todo.done;
+  todo.done = !todo.done;
+  todo.doneAt = todo.done ? new Date().toISOString() : null;
+  renderTodos();
+  try {
+    const r = await fetch('/api/todos/toggle', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id })
+    });
+    if (!r.ok) {
+      // Revert
+      todo.done = wasDone;
+      const res = await r.json();
+      showToast(res.error || 'Nelze přepnout', true);
+      renderTodos();
+    }
+  } catch(e) {
+    todo.done = wasDone;
+    showToast('Síťová chyba', true);
+    renderTodos();
+  }
+}
+
+async function deleteTodo(id){
+  if (!isAdmin) return;
+  const todo = appData.todos.find(t => t.id === id);
+  if (!todo) return;
+  if (!confirm(`Smazat úkol?\n\n"${todo.text.slice(0,80)}${todo.text.length>80?'…':''}"`)) return;
+  const pw = sessionStorage.getItem('adminPw') || '';
+  try {
+    const r = await fetch('/api/todos/delete', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: pw, id })
+    });
+    const res = await r.json();
+    if (r.ok) {
+      appData.todos = appData.todos.filter(t => t.id !== id);
+      renderTodos();
+    } else {
+      showToast(res.error || 'Nelze smazat', true);
+    }
+  } catch(e) {
+    showToast('Síťová chyba', true);
+  }
+}
+
+function startEditTodo(id){
+  if (!isAdmin) return;
+  const todo = appData.todos.find(t => t.id === id);
+  if (!todo) return;
+  const item = document.querySelector(`.todo-item[data-id="${id}"]`);
+  if (!item) return;
+  const textEl = item.querySelector('.todo-text');
+  const original = todo.text;
+  textEl.outerHTML = `<input class="todo-text-input" id="editInput-${id}" type="text" maxlength="300" value="${escH(original)}">`;
+  const inp = document.getElementById(`editInput-${id}`);
+  inp.focus();
+  inp.select();
+  let saving = false;
+  const finish = async (save) => {
+    if (saving) return;
+    saving = true;
+    if (!save || inp.value.trim() === original || !inp.value.trim()) {
+      renderTodos();
+      return;
+    }
+    const pw = sessionStorage.getItem('adminPw') || '';
+    try {
+      const r = await fetch('/api/todos/edit', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ password: pw, id, text: inp.value.trim() })
+      });
+      const res = await r.json();
+      if (r.ok) {
+        todo.text = res.todo.text;
+        renderTodos();
+      } else {
+        showToast(res.error || 'Nelze uložit', true);
+        renderTodos();
+      }
+    } catch(e) {
+      showToast('Síťová chyba', true);
+      renderTodos();
+    }
+  };
+  inp.onkeydown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { finish(false); }
+  };
+  inp.onblur = () => finish(true);
+}
+
+async function clearDoneTodos(){
+  if (!isAdmin) return;
+  const doneCount = appData.todos.filter(t => t.done).length;
+  if (doneCount === 0) return;
+  if (!confirm(`Smazat všech ${doneCount} dokončených úkolů?`)) return;
+  const pw = sessionStorage.getItem('adminPw') || '';
+  try {
+    const r = await fetch('/api/todos/clearDone', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: pw })
+    });
+    if (r.ok) {
+      appData.todos = appData.todos.filter(t => !t.done);
+      renderTodos();
+      showToast(`✓ Smazáno ${doneCount} úkolů`);
+    } else {
+      const res = await r.json();
+      showToast(res.error || 'Chyba', true);
+    }
+  } catch(e) {
+    showToast('Síťová chyba', true);
+  }
+}
+
+// Pravidelně přerenderuj relativní časy ("před 5 min" -> "před 6 min")
+setInterval(() => {
+  if (appData.todos && appData.todos.length > 0) renderTodos();
+}, 60000);
+
+// Před opuštěním stránky upozorni na neuložené plán-změny
 window.addEventListener('beforeunload', (e) => {
   if (unsaved && isAdmin) {
     e.preventDefault();
