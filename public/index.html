@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plán party 👷</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap');
+
+  :root {
+    --bg: #f0ece4;
+    --ink: #1a1814;
+    --muted: #8a8278;
+    --line: #c8c2b8;
+    --white: #faf8f4;
+    --err: #c0392b;
+    --accent: #d4a800;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg); color: var(--ink);
+    min-height: 100vh; padding: 20px 14px 60px;
+  }
+
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  h1 { font-family: 'Syne', sans-serif; font-size: clamp(20px, 4vw, 28px); font-weight: 800; letter-spacing: -1px; }
+  .mode-badge {
+    font-size: 11px; padding: 3px 10px; border-radius: 99px;
+    font-weight: 500; letter-spacing: .5px; text-transform: uppercase;
+  }
+  .mode-badge.public { background: #e0dcd4; color: var(--muted); }
+  .mode-badge.admin  { background: var(--accent); color: #1a1814; }
+
+  .week-nav { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .week-nav button {
+    background: var(--ink); color: var(--bg); border: none;
+    padding: 6px 12px; font-family: 'DM Mono', monospace; font-size: 12px;
+    cursor: pointer; border-radius: 3px;
+  }
+  .week-nav button:hover { opacity: .8; }
+  .week-label { font-size: 12px; color: var(--muted); min-width: 170px; text-align: center; }
+
+  .login-strip { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .login-strip input {
+    font-family: 'DM Mono', monospace; font-size: 13px;
+    border: 1px solid var(--line); border-radius: 4px;
+    padding: 6px 12px; background: var(--white); color: var(--ink); width: 180px;
+  }
+  .login-strip input:focus { outline: 2px solid var(--accent); }
+
+  .toolbar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+
+  .btn {
+    font-family: 'DM Mono', monospace; font-size: 12px;
+    padding: 6px 14px; border-radius: 3px; cursor: pointer;
+    border: 1px solid transparent; transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn-primary { background: var(--ink); color: var(--bg); }
+  .btn-secondary { background: none; border-color: var(--line); color: var(--ink); }
+  .btn-save { background: var(--accent); color: #1a1814; font-weight: 500; }
+  .btn-save.dirty { background: #ff8c00; color: #fff; }
+  .btn-sm { padding: 2px 7px; font-size: 10px; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: var(--bg); padding: 10px 20px;
+    border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .3s;
+    z-index: 500; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+  .toast.err { background: var(--err); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; align-items: center; }
+  .legend-item {
+    display: flex; align-items: center; gap: 6px; font-size: 12px;
+    background: var(--white); border: 1px solid var(--line);
+    border-radius: 4px; padding: 4px 10px;
+  }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  .grid-wrapper {
+    overflow-x: auto; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--white);
+    margin-bottom: 14px; -webkit-overflow-scrolling: touch;
+  }
+  table { border-collapse: collapse; min-width: 760px; width: 100%; }
+
+  thead th {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--ink); color: var(--bg);
+    font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: .5px;
+    padding: 9px 6px; text-align: center;
+    border-right: 1px solid #333; white-space: nowrap;
+  }
+  thead th:first-child {
+    text-align: left; padding-left: 14px;
+    position: sticky; left: 0; z-index: 20; min-width: 130px;
+  }
+  .day-weekend { background: #2a2824 !important; }
+  .day-today { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  tbody tr { border-bottom: 1px solid var(--line); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:nth-child(even) { background: #f5f1ea; }
+
+  td { padding: 0; border-right: 1px solid var(--line); vertical-align: middle; text-align: center; }
+  td:last-child { border-right: none; }
+
+  td.worker-name {
+    position: sticky; left: 0; z-index: 5;
+    background: var(--white); text-align: left;
+    padding: 8px 12px; font-size: 13px; font-weight: 500;
+    white-space: nowrap; border-right: 2px solid var(--line);
+  }
+  tbody tr:nth-child(even) td.worker-name { background: #f5f1ea; }
+
+  /* Cell - holds either single block or split AM/PM */
+  .cell-wrap {
+    width: 50px; height: 46px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 4px;
+  }
+  .cell {
+    width: 42px; height: 38px;
+    border-radius: 5px; overflow: hidden;
+    display: flex; user-select: none;
+    transition: filter .1s, transform .1s;
+    background: #e0dcd4;
+  }
+  .cell.editable { cursor: pointer; }
+  .cell.editable:hover { filter: brightness(.88); transform: scale(1.05); }
+
+  .cell-half {
+    flex: 1; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 500; color: #fff;
+    overflow: hidden; padding: 0 2px; text-align: center;
+    line-height: 1.1;
+  }
+  .cell-half.empty { background: #e0dcd4; color: var(--muted); }
+  .cell.full .cell-half { font-size: 10px; }
+
+  .cell-divider { width: 1px; background: rgba(255,255,255,.5); }
+
+  /* Picker dropdown */
+  .picker {
+    position: fixed; z-index: 400;
+    background: var(--white); border: 1px solid var(--ink);
+    border-radius: 6px; box-shadow: 4px 4px 0 var(--ink);
+    overflow: hidden; min-width: 170px;
+    animation: popIn .12s ease;
+  }
+  @keyframes popIn { from{opacity:0;transform:translateX(-50%) scale(.92)} to{opacity:1;transform:translateX(-50%) scale(1)} }
+
+  .picker-section { border-bottom: 1px solid var(--line); padding: 6px 0; }
+  .picker-section:last-child { border-bottom: none; }
+  .picker-label {
+    padding: 4px 12px; font-size: 10px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+  .picker-item {
+    padding: 7px 14px; font-size: 12px; cursor: pointer;
+    display: flex; align-items: center; gap: 8px; transition: background .1s;
+  }
+  .picker-item:hover { background: var(--bg); }
+  .picker-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .picker-split-icon {
+    width: 14px; height: 12px; display: inline-block; flex-shrink: 0;
+    border: 1px solid var(--ink); border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent) 50%, #2d6a4f 50%);
+  }
+
+  /* Summary row */
+  .summary-row td {
+    font-size: 11px; color: var(--muted);
+    padding: 6px 4px; text-align: center;
+    border-top: 2px solid var(--line);
+  }
+  .summary-row td:first-child {
+    text-align: left; padding-left: 14px;
+    font-size: 12px; font-weight: 500; color: var(--ink);
+    position: sticky; left: 0; background: var(--white); z-index: 5;
+  }
+  .count-badge {
+    display: inline-block; background: var(--ink); color: var(--bg);
+    border-radius: 3px; padding: 1px 5px; font-size: 10px;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 300;
+  }
+  .modal {
+    background: var(--white); border: 1px solid var(--ink);
+    border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+    padding: 24px; min-width: 280px; max-width: 95vw;
+  }
+  .modal h2 { font-family: 'Syne', sans-serif; font-size: 18px; margin-bottom: 16px; }
+  .modal input {
+    width: 100%; font-family: 'DM Mono', monospace; font-size: 13px;
+    border: 1px solid var(--line); border-radius: 4px; padding: 7px 10px;
+    background: var(--bg); color: var(--ink); margin-bottom: 10px;
+  }
+  .modal label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+  .color-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .color-swatch {
+    width: 28px; height: 28px; border-radius: 4px; cursor: pointer;
+    border: 2px solid transparent;
+  }
+  .color-swatch.selected { border-color: var(--ink); }
+
+  .footer-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .footer-info { font-size: 11px; color: var(--muted); }
+
+  .help-text {
+    font-size: 11px; color: var(--muted); margin: 8px 0 14px; font-style: italic;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Plán party 👷</h1>
+  <span class="mode-badge public" id="modeBadge">Veřejný pohled</span>
+  <div class="week-nav">
+    <button onclick="shiftWeek(-7)">◀ −7d</button>
+    <button onclick="goToday()" title="Skočit na dnešek">●</button>
+    <span class="week-label" id="weekLabel"></span>
+    <button onclick="shiftWeek(7)">+7d ▶</button>
+  </div>
+</header>
+
+<div class="login-strip" id="loginStrip">
+  <input type="password" id="pwInput" placeholder="Heslo pro editaci…" onkeydown="if(event.key==='Enter')login()">
+  <button class="btn btn-primary" onclick="login()">Přihlásit</button>
+</div>
+
+<div class="toolbar" id="adminToolbar" style="display:none">
+  <button class="btn btn-secondary" onclick="openModal('worker')">+ Přidat člověka</button>
+  <button class="btn btn-secondary" onclick="openModal('stavba')">+ Přidat stavbu</button>
+  <button class="btn btn-save" id="saveBtn" onclick="saveToServer()">💾 Uložit změny</button>
+  <button class="btn btn-secondary" onclick="logout()" style="margin-left:auto">Odhlásit</button>
+</div>
+
+<p class="help-text" id="helpText" style="display:none">
+  Tip: Klik na buňku = celý den jedna stavba. Pro půlden vyber „Rozdělit den“ a pak klikni zvlášť na dopoledne / odpoledne.
+</p>
+
+<div class="legend" id="legend"></div>
+
+<div class="grid-wrapper">
+  <table id="planTable">
+    <thead id="thead"></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<div class="footer-row">
+  <span class="footer-info" id="footerInfo"></span>
+  <button class="btn btn-secondary" onclick="exportCSV()" style="margin-left:auto;font-size:11px">↓ CSV</button>
+</div>
+
+<div class="picker" id="picker" style="display:none"></div>
+
+<div class="modal-overlay" id="modalOverlay" style="display:none">
+  <div class="modal" id="modal"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const COLORS = ['#d4a800','#2d6a4f','#c0392b','#1a6b8a','#6d4c8a','#b5561f','#1a5276','#7d6608','#117a65','#784212'];
+const COLOR_NAMES = ['Okrová','Zelená','Červená','Modrá','Fialová','Oranžová','Námořní','Olivová','Tyrkys','Hnědá'];
+const DAYS_CS = ['Ne','Po','Út','St','Čt','Pá','So'];
+const MONTHS_CS = ['led','úno','bře','dub','kvě','čvn','čvc','srp','zář','říj','lis','pro'];
+
+let isAdmin = false;
+let unsaved = false;
+let startOffset = 0;
+let appData = { workers: [], stavby: [], assignments: {} };
+const today = new Date(); today.setHours(0,0,0,0);
+
+function dateStr(d){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+}
+function addDays(d,n){ const r=new Date(d); r.setDate(r.getDate()+n); return r; }
+function escH(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ─── DATA HELPERS ─────────────────────────────────────────
+// Migrate old format (single number) to new format ({am,pm})
+function getCell(wi, dStr){
+  const key = `${wi}_${dStr}`;
+  const v = appData.assignments[key];
+  if (v === undefined || v === null) return { am: null, pm: null };
+  if (typeof v === 'number') return { am: v, pm: v }; // old format
+  return { am: v.am ?? null, pm: v.pm ?? null };
+}
+function setCell(wi, dStr, am, pm){
+  const key = `${wi}_${dStr}`;
+  if (am === null && pm === null) {
+    delete appData.assignments[key];
+  } else if (am === pm && am !== null) {
+    appData.assignments[key] = { am, pm }; // full day
+  } else {
+    appData.assignments[key] = { am, pm };
+  }
+}
+
+// ─── LOAD ─────────────────────────────────────────────────
+async function loadData(){
+  try {
+    const r = await fetch('/api/data');
+    appData = await r.json();
+    if (!appData.assignments) appData.assignments = {};
+  } catch(e){
+    showToast('Nepodařilo se načíst data', true);
+  }
+  render();
+}
+
+// ─── SAVE ─────────────────────────────────────────────────
+async function saveToServer(){
+  const pw = sessionStorage.getItem('adminPw') || '';
+  const btn = document.getElementById('saveBtn');
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Ukládám…';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/save', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: pw, data: appData })
+    });
+    const res = await r.json();
+    if(r.ok){
+      unsaved = false;
+      showToast('✓ Uloženo');
+    } else {
+      showToast(res.error || 'Chyba při ukládání', true);
+    }
+  } catch(e){
+    showToast('Síťová chyba: ' + e.message, true);
+  }
+  btn.disabled = false;
+  updateSaveBtn();
+}
+
+function markUnsaved(){
+  if(!isAdmin) return;
+  unsaved = true;
+  updateSaveBtn();
+}
+
+function updateSaveBtn(){
+  const btn = document.getElementById('saveBtn');
+  if(!btn) return;
+  if (unsaved) {
+    btn.textContent = '💾 Uložit změny •';
+    btn.classList.add('dirty');
+  } else {
+    btn.textContent = '💾 Uloženo';
+    btn.classList.remove('dirty');
+  }
+}
+
+// ─── AUTH ─────────────────────────────────────────────────
+async function login(){
+  const pw = document.getElementById('pwInput').value;
+  if (!pw) return;
+  try {
+    const r = await fetch('/api/verify', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: pw })
+    });
+    if(r.ok){
+      sessionStorage.setItem('adminPw', pw);
+      enableAdminMode();
+      showToast('✓ Přihlášen jako admin');
+    } else {
+      showToast('Špatné heslo', true);
+    }
+  } catch(e){
+    showToast('Síťová chyba', true);
+  }
+}
+
+function enableAdminMode(){
+  isAdmin = true;
+  document.getElementById('loginStrip').style.display = 'none';
+  document.getElementById('adminToolbar').style.display = 'flex';
+  document.getElementById('helpText').style.display = 'block';
+  document.getElementById('modeBadge').className = 'mode-badge admin';
+  document.getElementById('modeBadge').textContent = 'Admin';
+  unsaved = false;
+  updateSaveBtn();
+  render();
+}
+
+function logout(){
+  sessionStorage.removeItem('adminPw');
+  isAdmin = false;
+  unsaved = false;
+  document.getElementById('loginStrip').style.display = 'flex';
+  document.getElementById('adminToolbar').style.display = 'none';
+  document.getElementById('helpText').style.display = 'none';
+  document.getElementById('modeBadge').className = 'mode-badge public';
+  document.getElementById('modeBadge').textContent = 'Veřejný pohled';
+  document.getElementById('pwInput').value = '';
+  render();
+}
+
+// Auto-login z session
+(async function(){
+  const saved = sessionStorage.getItem('adminPw');
+  await loadData();
+  if(saved){
+    try {
+      const r = await fetch('/api/verify',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({password:saved})
+      });
+      if(r.ok) enableAdminMode();
+    } catch(e){}
+  }
+})();
+
+// ─── RENDER ───────────────────────────────────────────────
+function render(){
+  const start = addDays(today, startOffset);
+  const days = Array.from({length:14}, (_,i) => addDays(start,i));
+  window._renderDays = days;
+
+  const s=days[0], e=days[13];
+  document.getElementById('weekLabel').textContent =
+    `${s.getDate()}. ${MONTHS_CS[s.getMonth()]} – ${e.getDate()}. ${MONTHS_CS[e.getMonth()]} ${e.getFullYear()}`;
+
+  // Legend
+  const leg = document.getElementById('legend');
+  leg.innerHTML = '';
+  appData.stavby.forEach((st,i)=>{
+    const el=document.createElement('div');
+    el.className='legend-item';
+    el.innerHTML=`<span class="legend-dot" style="background:${st.color}"></span>${escH(st.name)}`;
+    if(isAdmin){
+      el.innerHTML+=` <button class="btn btn-sm btn-secondary" onclick="editStavba(${i})" style="margin-left:4px">✎</button>
+        <button style="color:var(--err);background:none;border:none;cursor:pointer;font-size:13px;font-weight:bold" onclick="deleteStavba(${i})" title="Smazat">×</button>`;
+    }
+    leg.appendChild(el);
+  });
+  const volEl=document.createElement('div');
+  volEl.className='legend-item';
+  volEl.innerHTML=`<span class="legend-dot" style="background:#c8c2b8"></span>Volno`;
+  leg.appendChild(volEl);
+
+  // Thead
+  let th=`<tr><th>Člověk</th>`;
+  days.forEach(d=>{
+    const isWe=d.getDay()===0||d.getDay()===6;
+    const isToday=dateStr(d)===dateStr(today);
+    th+=`<th class="${isWe?'day-weekend':''} ${isToday?'day-today':''}">
+      ${DAYS_CS[d.getDay()]}<br><span style="font-size:10px;font-weight:400">${d.getDate()}.${d.getMonth()+1}</span></th>`;
+  });
+  th+=`</tr>`;
+  document.getElementById('thead').innerHTML=th;
+
+  // Tbody
+  const tbody=document.getElementById('tbody');
+  tbody.innerHTML='';
+
+  appData.workers.forEach((w,wi)=>{
+    const tr=document.createElement('tr');
+    let html=`<td class="worker-name">${escH(w)}`;
+    if(isAdmin) html+=` <button style="color:var(--err);background:none;border:none;cursor:pointer;font-size:14px;font-weight:bold;margin-left:4px" onclick="deleteWorker(${wi})" title="Smazat">×</button>`;
+    html+=`</td>`;
+
+    days.forEach((d,di)=>{
+      const dStr = dateStr(d);
+      const cell = getCell(wi, dStr);
+      const isWe=d.getDay()===0||d.getDay()===6;
+      const isFull = cell.am === cell.pm;
+
+      const renderHalf = (val) => {
+        if (val === null || val === undefined) return `<div class="cell-half empty"></div>`;
+        const st = appData.stavby[val];
+        if (!st) return `<div class="cell-half empty"></div>`;
+        return `<div class="cell-half" style="background:${st.color}">${escH(st.name.slice(0,4))}</div>`;
+      };
+
+      const cellClass = `cell ${isAdmin?'editable':''} ${isFull?'full':'split'}`;
+      const onclick = isAdmin ? `onclick="openPicker(event,${wi},${di})"` : '';
+
+      let inner;
+      if (isFull && cell.am === null) {
+        inner = `<div class="cell-half empty">—</div>`;
+      } else if (isFull) {
+        const st = appData.stavby[cell.am];
+        const label = st ? st.name.slice(0,5) : '';
+        const bg = st ? st.color : '#e0dcd4';
+        inner = `<div class="cell-half" style="background:${bg}">${escH(label)}</div>`;
+      } else {
+        inner = renderHalf(cell.am) + `<div class="cell-divider"></div>` + renderHalf(cell.pm);
+      }
+
+      html+=`<td style="${isWe?'background:#edeae4':''}">
+        <div class="cell-wrap">
+          <div class="${cellClass}" ${onclick}>${inner}</div>
+        </div>
+      </td>`;
+    });
+    tr.innerHTML=html;
+    tbody.appendChild(tr);
+  });
+
+  // Summary - počet lidí po dnech (počítáme každý půlden zvlášť, pak max)
+  const sumTr=document.createElement('tr');
+  sumTr.className='summary-row';
+  let shtml=`<td>Obsazenost</td>`;
+  days.forEach(d=>{
+    const dStr = dateStr(d);
+    let amCnt=0, pmCnt=0;
+    appData.workers.forEach((_,wi)=>{
+      const cell = getCell(wi, dStr);
+      if (cell.am !== null && cell.am !== undefined) amCnt++;
+      if (cell.pm !== null && cell.pm !== undefined) pmCnt++;
+    });
+    const max = Math.max(amCnt, pmCnt);
+    shtml+=`<td>${max?`<span class="count-badge">${max}</span>`:''}</td>`;
+  });
+  sumTr.innerHTML=shtml;
+  tbody.appendChild(sumTr);
+
+  // Footer info
+  const totalAssigned = Object.keys(appData.assignments).length;
+  document.getElementById('footerInfo').textContent=
+    `${appData.workers.length} lidí · ${appData.stavby.length} staveb · ${totalAssigned} přiřazení`;
+}
+
+// ─── PICKER ───────────────────────────────────────────────
+function openPicker(e, wi, di){
+  e.stopPropagation();
+  const picker=document.getElementById('picker');
+  const rect=e.currentTarget.getBoundingClientRect();
+  const dStr = dateStr(window._renderDays[di]);
+  const cell = getCell(wi, dStr);
+  const isFull = cell.am === cell.pm;
+
+  let html = '';
+
+  // Sekce: Celý den
+  html += `<div class="picker-section">
+    <div class="picker-label">Celý den</div>`;
+  appData.stavby.forEach((st,si)=>{
+    const isCurrent = isFull && cell.am === si;
+    html+=`<div class="picker-item" onclick="assignFull(${wi},${di},${si})" style="${isCurrent?'background:var(--bg);font-weight:500':''}">
+      <span class="picker-dot" style="background:${st.color}"></span>${escH(st.name)}</div>`;
+  });
+  html+=`<div class="picker-item" onclick="assignFull(${wi},${di},null)">
+    <span class="picker-dot" style="background:#c8c2b8;border:1px dashed #aaa"></span>Volno</div>
+  </div>`;
+
+  // Sekce: Půlden - jen pokud už není rozděleno
+  if (isFull) {
+    html += `<div class="picker-section">
+      <div class="picker-item" onclick="splitDay(${wi},${di})">
+        <span class="picker-split-icon"></span>Rozdělit den (dop / odp)
+      </div>
+    </div>`;
+  } else {
+    // Cell je rozdělený, dej možnost editovat každou půlku zvlášť
+    html += `<div class="picker-section">
+      <div class="picker-label">Dopoledne</div>`;
+    appData.stavby.forEach((st,si)=>{
+      const isCurrent = cell.am === si;
+      html+=`<div class="picker-item" onclick="assignHalf(${wi},${di},'am',${si})" style="${isCurrent?'background:var(--bg);font-weight:500':''}">
+        <span class="picker-dot" style="background:${st.color}"></span>${escH(st.name)}</div>`;
+    });
+    html+=`<div class="picker-item" onclick="assignHalf(${wi},${di},'am',null)">
+      <span class="picker-dot" style="background:#c8c2b8;border:1px dashed #aaa"></span>Volno</div>
+    </div>`;
+
+    html += `<div class="picker-section">
+      <div class="picker-label">Odpoledne</div>`;
+    appData.stavby.forEach((st,si)=>{
+      const isCurrent = cell.pm === si;
+      html+=`<div class="picker-item" onclick="assignHalf(${wi},${di},'pm',${si})" style="${isCurrent?'background:var(--bg);font-weight:500':''}">
+        <span class="picker-dot" style="background:${st.color}"></span>${escH(st.name)}</div>`;
+    });
+    html+=`<div class="picker-item" onclick="assignHalf(${wi},${di},'pm',null)">
+      <span class="picker-dot" style="background:#c8c2b8;border:1px dashed #aaa"></span>Volno</div>
+    </div>`;
+  }
+
+  picker.innerHTML = html;
+  picker.style.display = 'block';
+  picker.style.top = (rect.bottom + 4) + 'px';
+
+  // Smart positioning - if too far right, align to viewport
+  const pickerWidth = 200;
+  let left = rect.left + rect.width/2;
+  if (left + pickerWidth/2 > window.innerWidth - 10) left = window.innerWidth - pickerWidth/2 - 10;
+  if (left - pickerWidth/2 < 10) left = pickerWidth/2 + 10;
+  picker.style.left = left + 'px';
+  picker.style.transform = 'translateX(-50%)';
+}
+
+function assignFull(wi, di, val){
+  const dStr = dateStr(window._renderDays[di]);
+  setCell(wi, dStr, val, val);
+  closePicker();
+  markUnsaved();
+  render();
+}
+function assignHalf(wi, di, half, val){
+  const dStr = dateStr(window._renderDays[di]);
+  const cell = getCell(wi, dStr);
+  if (half === 'am') setCell(wi, dStr, val, cell.pm);
+  else setCell(wi, dStr, cell.am, val);
+  closePicker();
+  markUnsaved();
+  render();
+}
+function splitDay(wi, di){
+  const dStr = dateStr(window._renderDays[di]);
+  const cell = getCell(wi, dStr);
+  // Pokud je celý den prázdný, nedělíme - jen otevřeme znovu picker s editací půldnů
+  if (cell.am === null && cell.pm === null) {
+    // Force split state by setting one half explicitly to first stavba
+    if (appData.stavby.length > 0) {
+      setCell(wi, dStr, 0, null);
+    }
+  } else {
+    // Force "split" view: nastav am=current, pm=null pokud byly stejné
+    setCell(wi, dStr, cell.am, null);
+  }
+  closePicker();
+  markUnsaved();
+  render();
+  // Znovu otevři picker
+  setTimeout(()=>{
+    const cells = document.querySelectorAll('.cell.editable');
+    // Najdeme ten správný - row wi, column di+1 (kvůli sticky col)
+    const tbody = document.getElementById('tbody');
+    const targetCell = tbody.children[wi]?.children[di+1]?.querySelector('.cell');
+    if (targetCell) {
+      const rect = targetCell.getBoundingClientRect();
+      const fakeEvent = { stopPropagation: ()=>{}, currentTarget: targetCell };
+      openPicker(fakeEvent, wi, di);
+    }
+  }, 50);
+}
+function closePicker(){ document.getElementById('picker').style.display = 'none'; }
+
+document.addEventListener('click', (e)=>{
+  if (!e.target.closest('.picker') && !e.target.closest('.cell.editable')) {
+    closePicker();
+  }
+});
+
+function shiftWeek(n){ startOffset+=n; render(); }
+function goToday(){ startOffset = 0; render(); }
+
+// ─── WORKERS / STAVBY ─────────────────────────────────────
+function deleteWorker(i){
+  if(!confirm(`Smazat "${appData.workers[i]}" z plánu?`)) return;
+  const newA={};
+  Object.keys(appData.assignments).forEach(k=>{
+    const m = k.match(/^(\d+)_(.+)$/);
+    if (!m) return;
+    const wi = parseInt(m[1]);
+    if (wi === i) return;
+    const newWi = wi > i ? wi - 1 : wi;
+    newA[`${newWi}_${m[2]}`] = appData.assignments[k];
+  });
+  appData.assignments = newA;
+  appData.workers.splice(i,1);
+  markUnsaved(); render();
+}
+
+function deleteStavba(i){
+  if(!confirm(`Smazat stavbu "${appData.stavby[i].name}"?\n\nVšechna přiřazení k této stavbě se zruší.`)) return;
+  const newA={};
+  Object.keys(appData.assignments).forEach(k=>{
+    const v = appData.assignments[k];
+    if (typeof v !== 'object' || v === null) return;
+    const am = v.am === i ? null : (v.am > i ? v.am - 1 : v.am);
+    const pm = v.pm === i ? null : (v.pm > i ? v.pm - 1 : v.pm);
+    if (am !== null || pm !== null) newA[k] = { am, pm };
+  });
+  appData.assignments = newA;
+  appData.stavby.splice(i,1);
+  markUnsaved(); render();
+}
+
+// ─── MODAL ────────────────────────────────────────────────
+let _editIdx = null;
+function openModal(mode, idx){
+  _editIdx = idx;
+  const overlay = document.getElementById('modalOverlay');
+  const modal = document.getElementById('modal');
+  overlay.style.display = 'flex';
+
+  if (mode === 'worker') {
+    modal.innerHTML = `<h2>Přidat člověka</h2>
+      <label>Jméno / přezdívka</label>
+      <input id="mInput" type="text" placeholder="Novák" autofocus>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal()">Zrušit</button>
+        <button class="btn btn-primary" onclick="saveWorker()">Přidat</button>
+      </div>`;
+    setTimeout(()=>{
+      const inp = document.getElementById('mInput');
+      inp.focus();
+      inp.onkeydown = e => { if(e.key==='Enter') saveWorker(); };
+    }, 50);
+  } else if (mode === 'stavba' || mode === 'editStavba') {
+    const editing = mode === 'editStavba';
+    const st = editing ? appData.stavby[idx] : { name: '', color: COLORS[appData.stavby.length % COLORS.length] };
+    window._selColor = st.color;
+    modal.innerHTML = `<h2>${editing?'Upravit stavbu':'Přidat stavbu'}</h2>
+      <label>Název stavby</label>
+      <input id="mInput" type="text" value="${escH(st.name)}" placeholder="Čihákova 34" autofocus>
+      <label>Barva</label>
+      <div class="color-row" id="colorRow"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal()">Zrušit</button>
+        <button class="btn btn-primary" onclick="saveStavba(${editing})">Uložit</button>
+      </div>`;
+    const cr = document.getElementById('colorRow');
+    COLORS.forEach((c,i)=>{
+      const s = document.createElement('div');
+      s.className = 'color-swatch' + (c===st.color?' selected':'');
+      s.style.background = c; s.title = COLOR_NAMES[i];
+      s.onclick = () => {
+        window._selColor = c;
+        document.querySelectorAll('.color-swatch').forEach(el => el.classList.remove('selected'));
+        s.classList.add('selected');
+      };
+      cr.appendChild(s);
+    });
+    setTimeout(()=>{
+      const inp = document.getElementById('mInput');
+      inp.focus(); inp.select();
+      inp.onkeydown = e => { if(e.key==='Enter') saveStavba(editing); };
+    }, 50);
+  }
+}
+function saveWorker(){
+  const v = document.getElementById('mInput').value.trim();
+  if(!v) return;
+  appData.workers.push(v); markUnsaved(); closeModal(); render();
+}
+function saveStavba(editing){
+  const v = document.getElementById('mInput').value.trim();
+  if(!v) return;
+  const obj = { name: v, color: window._selColor || COLORS[0] };
+  if (editing) appData.stavby[_editIdx] = obj;
+  else appData.stavby.push(obj);
+  markUnsaved(); closeModal(); render();
+}
+function editStavba(i){ openModal('editStavba', i); }
+function closeModal(){ document.getElementById('modalOverlay').style.display = 'none'; }
+document.getElementById('modalOverlay').onclick = function(e){ if(e.target===this) closeModal(); };
+
+// ─── TOAST ────────────────────────────────────────────────
+let _toastTimer;
+function showToast(msg, isErr=false){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isErr?' err':'');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(()=>t.className='toast', 2800);
+}
+
+// ─── EXPORT ───────────────────────────────────────────────
+function exportCSV(){
+  const start = addDays(today, startOffset);
+  const days = Array.from({length:14},(_,i)=>addDays(start,i));
+  let csv = 'Jméno;Půlden';
+  days.forEach(d => csv += `;${dateStr(d)}`);
+  csv += '\n';
+  appData.workers.forEach((w,wi)=>{
+    // dvě řádky na člověka: dop a odp
+    ['am','pm'].forEach(half=>{
+      csv += `"${w}";${half==='am'?'Dop':'Odp'}`;
+      days.forEach(d=>{
+        const cell = getCell(wi, dateStr(d));
+        const val = cell[half];
+        const name = (val !== null && val !== undefined && appData.stavby[val]) ? appData.stavby[val].name : '';
+        csv += `;"${name}"`;
+      });
+      csv += '\n';
+    });
+  });
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `plan_${dateStr(start)}.csv`;
+  a.click();
+}
+
+// Před opuštěním stránky upozorni na neuložené
+window.addEventListener('beforeunload', (e) => {
+  if (unsaved && isAdmin) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+</script>
+</body>
+</html>
