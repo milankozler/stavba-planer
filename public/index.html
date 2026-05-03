@@ -208,11 +208,13 @@
   }
   .modal label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
   .modal-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
-  .color-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .color-row { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; max-width: 320px; }
   .color-swatch {
-    width: 28px; height: 28px; border-radius: 4px; cursor: pointer;
+    width: 26px; height: 26px; border-radius: 4px; cursor: pointer;
     border: 2px solid transparent;
+    transition: transform .12s;
   }
+  .color-swatch:hover { transform: scale(1.15); }
   .color-swatch.selected { border-color: var(--ink); }
 
   .footer-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
@@ -317,6 +319,114 @@
 
   .todo-busy { opacity: .5; pointer-events: none; }
 
+  /* ─── Assignees: chips, multiselect ─── */
+  .assignee-row {
+    display: flex; flex-wrap: wrap; gap: 4px;
+    align-items: center; padding-left: 30px;
+    margin-top: 2px;
+  }
+  .assignee-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #ede9e0; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 99px;
+    padding: 2px 8px; font-size: 10px;
+    line-height: 1.4;
+  }
+  .assignee-chip.removable {
+    cursor: default;
+  }
+  .assignee-chip-x {
+    cursor: pointer; opacity: .5;
+    font-weight: bold; padding: 0 2px;
+    transition: opacity .12s, color .12s;
+  }
+  .assignee-chip-x:hover { opacity: 1; color: var(--err); }
+  .assignee-chip.orphan {
+    background: #f4ece0;
+    color: var(--muted);
+    font-style: italic;
+  }
+  .assignee-chip.orphan::before {
+    content: '⚐';
+    margin-right: 2px;
+  }
+
+  .assignee-add-btn {
+    background: none; border: 1px dashed var(--line);
+    color: var(--muted); border-radius: 99px;
+    padding: 1px 8px; font-size: 10px; cursor: pointer;
+    font-family: 'DM Mono', monospace;
+    transition: all .12s;
+  }
+  .assignee-add-btn:hover { border-color: var(--ink); color: var(--ink); border-style: solid; }
+
+  /* Multiselect dropdown */
+  .ms-dropdown {
+    position: fixed; z-index: 400;
+    background: var(--white); border: 1px solid var(--ink);
+    border-radius: 6px; box-shadow: 4px 4px 0 var(--ink);
+    overflow: hidden; min-width: 180px; max-width: 260px;
+    max-height: 280px; display: flex; flex-direction: column;
+    animation: popIn .12s ease;
+  }
+  .ms-list {
+    overflow-y: auto; max-height: 200px;
+    padding: 4px 0;
+  }
+  .ms-item {
+    padding: 6px 12px; font-size: 12px; cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+    transition: background .1s;
+  }
+  .ms-item:hover { background: var(--bg); }
+  .ms-checkbox {
+    width: 14px; height: 14px;
+    border: 1.5px solid var(--line); border-radius: 3px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--white); flex-shrink: 0;
+    font-size: 10px; line-height: 1; font-weight: bold;
+  }
+  .ms-checkbox.checked {
+    background: var(--accent); border-color: var(--accent); color: #1a1814;
+  }
+  .ms-empty {
+    padding: 12px; text-align: center; font-size: 11px;
+    color: var(--muted); font-style: italic;
+  }
+  .ms-footer {
+    border-top: 1px solid var(--line); padding: 6px;
+    display: flex; gap: 4px; align-items: center;
+    background: var(--bg);
+  }
+  .ms-footer button {
+    flex: 1; font-family: 'DM Mono', monospace; font-size: 11px;
+    padding: 4px 8px; border-radius: 3px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--white); color: var(--ink);
+  }
+  .ms-footer button:hover { border-color: var(--ink); }
+  .ms-footer button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+  /* Manage assignees modal */
+  .assignee-manage-list {
+    display: flex; flex-direction: column; gap: 4px;
+    margin-bottom: 12px; max-height: 240px; overflow-y: auto;
+  }
+  .assignee-manage-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; background: var(--bg);
+    border-radius: 4px; font-size: 13px;
+  }
+  .assignee-manage-item button {
+    margin-left: auto; background: none; border: none;
+    color: var(--muted); cursor: pointer; font-size: 14px;
+    padding: 0 4px; font-weight: bold;
+  }
+  .assignee-manage-item button:hover { color: var(--err); }
+  .assignee-manage-empty {
+    text-align: center; padding: 16px; color: var(--muted);
+    font-size: 12px; font-style: italic;
+  }
+
   .help-text {
     font-size: 11px; color: var(--muted); margin: 8px 0 14px; font-style: italic;
   }
@@ -370,6 +480,9 @@
   <div class="todo-header">
     <h2>📝 Úkoly</h2>
     <span class="todo-counter" id="todoCounter"></span>
+    <button class="todo-clear-btn" id="todoManageBtn" onclick="openManageAssignees()" style="display:none;margin-left:auto">
+      👥 Řešitelé
+    </button>
     <button class="todo-clear-btn" id="todoClearBtn" onclick="clearDoneTodos()" style="display:none">
       Smazat dokončené
     </button>
@@ -378,10 +491,13 @@
     <input
       type="text"
       id="todoInput"
-      placeholder="Nový úkol… (např. Honza odveze cement na stavbu B)"
+      placeholder="Nový úkol… (např. odvézt cement na stavbu B)"
       maxlength="300"
       onkeydown="if(event.key==='Enter')addTodo()"
     >
+    <button class="assignee-add-btn" id="newTodoAssigneeBtn" onclick="openNewTodoAssigneePicker(event)" style="padding:6px 12px;font-size:12px">
+      + Řešitelé <span id="newTodoAssigneeCount"></span>
+    </button>
     <button class="btn btn-primary" onclick="addTodo()">+ Přidat</button>
   </div>
   <div class="todo-list" id="todoList"></div>
@@ -396,15 +512,40 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const COLORS = ['#d4a800','#2d6a4f','#c0392b','#1a6b8a','#6d4c8a','#b5561f','#1a5276','#7d6608','#117a65','#784212'];
-const COLOR_NAMES = ['Okrová','Zelená','Červená','Modrá','Fialová','Oranžová','Námořní','Olivová','Tyrkys','Hnědá'];
+const COLORS = [
+  '#d4a800', // 1  Okrová
+  '#2d6a4f', // 2  Zelená lesní
+  '#c0392b', // 3  Červená cihlová
+  '#1a6b8a', // 4  Modrá oceánová
+  '#6d4c8a', // 5  Fialová
+  '#b5561f', // 6  Oranžová pálená
+  '#1a5276', // 7  Modrá námořní
+  '#7d6608', // 8  Olivová
+  '#117a65', // 9  Tyrkysová
+  '#784212', // 10 Hnědá kakaová
+  '#7e1f8c', // 11 Purpurová
+  '#566573', // 12 Šedá tmavá
+  '#a93226', // 13 Vínová
+  '#196f3d', // 14 Zelená temná
+  '#ad6b1f', // 15 Karamelová
+  '#34495e', // 16 Modrošedá
+  '#0e6655', // 17 Smaragd
+  '#9c640c', // 18 Hořčicová
+  '#5b2c6f', // 19 Ametystová
+  '#1c2833'  // 20 Antracit
+];
+const COLOR_NAMES = [
+  'Okrová','Zelená lesní','Cihlová','Oceán','Fialová','Oranžová','Námořní','Olivová','Tyrkys','Kakao',
+  'Purpur','Šedá','Vínová','Smrk','Karamel','Břidlice','Smaragd','Hořčice','Ametyst','Antracit'
+];
 const DAYS_CS = ['Ne','Po','Út','St','Čt','Pá','So'];
 const MONTHS_CS = ['led','úno','bře','dub','kvě','čvn','čvc','srp','zář','říj','lis','pro'];
 
 let isAdmin = false;
 let unsaved = false;
 let startOffset = 0;
-let appData = { workers: [], stavby: [], assignments: {} };
+let appData = { workers: [], stavby: [], assignments: {}, todos: [], assignees: [] };
+let newTodoAssignees = []; // Buffer pro řešitele nového úkolu (před odesláním)
 const today = new Date(); today.setHours(0,0,0,0);
 
 function dateStr(d){
@@ -441,6 +582,11 @@ async function loadData(){
     appData = await r.json();
     if (!appData.assignments) appData.assignments = {};
     if (!Array.isArray(appData.todos)) appData.todos = [];
+    if (!Array.isArray(appData.assignees)) appData.assignees = [];
+    // Backward compat: doplň prázdné assignees do existujících úkolů
+    appData.todos.forEach(t => {
+      if (!Array.isArray(t.assignees)) t.assignees = [];
+    });
   } catch(e){
     showToast('Nepodařilo se načíst data', true);
   }
@@ -937,9 +1083,10 @@ function renderTodos(){
   const list = document.getElementById('todoList');
   const counter = document.getElementById('todoCounter');
   const clearBtn = document.getElementById('todoClearBtn');
+  const manageBtn = document.getElementById('todoManageBtn');
   const todos = appData.todos || [];
 
-  // sort: nedokončené nahoře (od nejstaršího), pak dokončené (od nedávno hotových)
+  // sort: nedokončené nahoře, pak dokončené (od nejnovějších)
   const sorted = [...todos].sort((a, b) => {
     if (a.done !== b.done) return a.done ? 1 : -1;
     if (a.done) return new Date(b.doneAt || 0) - new Date(a.doneAt || 0);
@@ -953,15 +1100,37 @@ function renderTodos(){
     : `${open} otevřených · ${done} hotových`;
 
   clearBtn.style.display = (isAdmin && done > 0) ? 'inline-block' : 'none';
+  manageBtn.style.display = isAdmin ? 'inline-block' : 'none';
+
+  // Aktualizuj počítadlo u tlačítka řešitelů pro nový úkol
+  updateNewTodoAssigneeCount();
 
   if (sorted.length === 0) {
     list.innerHTML = `<div class="todo-empty">Zatím žádné úkoly. Přidej první výše ↑</div>`;
     return;
   }
 
+  const knownSet = new Set(appData.assignees || []);
+
   list.innerHTML = sorted.map(t => {
     const created = formatRelativeDate(t.createdAt);
     const safeText = escH(t.text);
+    const assignees = Array.isArray(t.assignees) ? t.assignees : [];
+
+    // Chips pro řešitele
+    const chips = assignees.map(name => {
+      const isOrphan = !knownSet.has(name);
+      const orphanTitle = isOrphan ? ' title="Řešitel už není v aktivním seznamu (zachovaná historie)"' : '';
+      return `<span class="assignee-chip ${isOrphan?'orphan':''} removable"${orphanTitle}>
+        ${escH(name)}
+        <span class="assignee-chip-x" onclick="removeAssigneeFromTodo('${t.id}','${escAttr(name)}')" title="Odebrat">×</span>
+      </span>`;
+    }).join('');
+
+    const addBtn = `<button class="assignee-add-btn" onclick="openTodoAssigneePicker(event,'${t.id}')">
+      ${assignees.length === 0 ? '+ řešitel' : '+'}
+    </button>`;
+
     return `<div class="todo-item ${t.done?'done':''}" data-id="${t.id}">
       <div class="todo-checkbox ${t.done?'checked':''}" onclick="toggleTodo('${t.id}')" title="${t.done?'Zrušit dokončení':'Označit jako hotové'}">
         ${t.done?'✓':''}
@@ -969,9 +1138,15 @@ function renderTodos(){
       <div class="todo-text ${isAdmin?'editable':''}" ${isAdmin?`ondblclick="startEditTodo('${t.id}')"`:''} title="${isAdmin?'Dvojklik pro úpravu':''}">${safeText}</div>
       <span class="todo-meta">${created}</span>
       ${isAdmin?`<button class="todo-delete-btn" onclick="deleteTodo('${t.id}')" title="Smazat">×</button>`:''}
+    </div>
+    <div class="assignee-row" data-todo-id="${t.id}">
+      ${chips}
+      ${addBtn}
     </div>`;
   }).join('');
 }
+
+function escAttr(s){ return String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
 
 function formatRelativeDate(iso){
   if (!iso) return '';
@@ -989,6 +1164,11 @@ function formatRelativeDate(iso){
   } catch(e) { return ''; }
 }
 
+function updateNewTodoAssigneeCount(){
+  const el = document.getElementById('newTodoAssigneeCount');
+  if (el) el.textContent = newTodoAssignees.length > 0 ? `(${newTodoAssignees.length})` : '';
+}
+
 async function addTodo(){
   const inp = document.getElementById('todoInput');
   const text = inp.value.trim();
@@ -998,12 +1178,13 @@ async function addTodo(){
     const r = await fetch('/api/todos/add', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text, assignees: newTodoAssignees })
     });
     const res = await r.json();
     if (r.ok) {
       appData.todos.push(res.todo);
       inp.value = '';
+      newTodoAssignees = []; // reset bufferu
       renderTodos();
     } else {
       showToast(res.error || 'Chyba', true);
@@ -1013,6 +1194,265 @@ async function addTodo(){
   }
   inp.disabled = false;
   inp.focus();
+}
+
+// ─── Assignee multiselect dropdown ────────────────────────
+function openNewTodoAssigneePicker(e){
+  e.stopPropagation();
+  showAssigneePicker(e.currentTarget, newTodoAssignees, (selected)=>{
+    newTodoAssignees = selected;
+    updateNewTodoAssigneeCount();
+  });
+}
+
+function openTodoAssigneePicker(e, todoId){
+  e.stopPropagation();
+  const todo = appData.todos.find(t => t.id === todoId);
+  if (!todo) return;
+  const current = Array.isArray(todo.assignees) ? [...todo.assignees] : [];
+  showAssigneePicker(e.currentTarget, current, async (selected)=>{
+    // Optimistic update
+    const orig = todo.assignees;
+    todo.assignees = selected;
+    renderTodos();
+    try {
+      const r = await fetch('/api/todos/setAssignees', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ id: todoId, assignees: selected })
+      });
+      if (!r.ok) {
+        const res = await r.json();
+        todo.assignees = orig;
+        showToast(res.error || 'Chyba', true);
+        renderTodos();
+      }
+    } catch(err) {
+      todo.assignees = orig;
+      showToast('Síťová chyba', true);
+      renderTodos();
+    }
+  });
+}
+
+async function removeAssigneeFromTodo(todoId, name){
+  const todo = appData.todos.find(t => t.id === todoId);
+  if (!todo) return;
+  const newList = (todo.assignees || []).filter(a => a !== name);
+  const orig = todo.assignees;
+  todo.assignees = newList;
+  renderTodos();
+  try {
+    const r = await fetch('/api/todos/setAssignees', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id: todoId, assignees: newList })
+    });
+    if (!r.ok) {
+      todo.assignees = orig;
+      showToast('Chyba', true);
+      renderTodos();
+    }
+  } catch(e) {
+    todo.assignees = orig;
+    showToast('Síťová chyba', true);
+    renderTodos();
+  }
+}
+
+let _msState = null;
+function showAssigneePicker(anchorEl, currentSelection, onApply){
+  closeAssigneePicker();
+  const dropdown = document.createElement('div');
+  dropdown.className = 'ms-dropdown';
+  dropdown.id = 'msDropdown';
+
+  const knownAssignees = appData.assignees || [];
+
+  // Sloučíme známé řešitele s těmi v aktuálním výběru (kvůli orphans)
+  const allOptions = [...knownAssignees];
+  currentSelection.forEach(n => {
+    if (!allOptions.includes(n)) allOptions.push(n);
+  });
+
+  if (allOptions.length === 0) {
+    dropdown.innerHTML = `<div class="ms-empty">
+      Zatím žádní řešitelé.<br>
+      ${isAdmin ? 'Přidej je tlačítkem <strong>👥 Řešitelé</strong> nahoře.' : 'Požádej admina o doplnění seznamu.'}
+    </div>
+    <div class="ms-footer">
+      <button onclick="closeAssigneePicker()">Zavřít</button>
+    </div>`;
+  } else {
+    let listHtml = '<div class="ms-list">';
+    allOptions.forEach((name, i) => {
+      const checked = currentSelection.includes(name);
+      const isOrphan = !knownAssignees.includes(name);
+      listHtml += `<div class="ms-item" onclick="toggleMsItem(${i})">
+        <span class="ms-checkbox ${checked?'checked':''}" data-i="${i}">${checked?'✓':''}</span>
+        <span style="${isOrphan?'font-style:italic;color:var(--muted)':''}">${escH(name)}${isOrphan?' (mimo seznam)':''}</span>
+      </div>`;
+    });
+    listHtml += '</div>';
+
+    dropdown.innerHTML = listHtml + `<div class="ms-footer">
+      <button onclick="closeAssigneePicker()">Zrušit</button>
+      <button class="primary" onclick="confirmAssigneePicker()">Použít</button>
+    </div>`;
+  }
+
+  document.body.appendChild(dropdown);
+  const rect = anchorEl.getBoundingClientRect();
+  let top = rect.bottom + 6;
+  let left = rect.left;
+  // Pokud by se dropdown nevešel napravo, posuň doleva
+  const ddWidth = 220;
+  if (left + ddWidth > window.innerWidth - 10) {
+    left = window.innerWidth - ddWidth - 10;
+  }
+  // Pokud nahoře taky chybí místo, dáme nad
+  const ddHeight = Math.min(280, allOptions.length * 32 + 60);
+  if (top + ddHeight > window.innerHeight - 10) {
+    top = rect.top - ddHeight - 6;
+    if (top < 10) top = 10;
+  }
+  dropdown.style.top = top + 'px';
+  dropdown.style.left = left + 'px';
+
+  _msState = {
+    options: allOptions,
+    selection: new Set(currentSelection),
+    onApply
+  };
+}
+
+function toggleMsItem(i){
+  if (!_msState) return;
+  const name = _msState.options[i];
+  if (_msState.selection.has(name)) _msState.selection.delete(name);
+  else _msState.selection.add(name);
+  // Update checkbox UI
+  const cb = document.querySelector(`.ms-checkbox[data-i="${i}"]`);
+  if (cb) {
+    if (_msState.selection.has(name)) {
+      cb.classList.add('checked');
+      cb.textContent = '✓';
+    } else {
+      cb.classList.remove('checked');
+      cb.textContent = '';
+    }
+  }
+}
+
+function confirmAssigneePicker(){
+  if (!_msState) return;
+  const sel = Array.from(_msState.selection);
+  const cb = _msState.onApply;
+  closeAssigneePicker();
+  cb(sel);
+}
+
+function closeAssigneePicker(){
+  const el = document.getElementById('msDropdown');
+  if (el) el.remove();
+  _msState = null;
+}
+
+// Zavři dropdown při kliknutí mimo
+document.addEventListener('click', (e) => {
+  if (_msState && !e.target.closest('#msDropdown') && !e.target.closest('.assignee-add-btn')) {
+    closeAssigneePicker();
+  }
+});
+
+// ─── Manage assignees modal (admin) ───────────────────────
+function openManageAssignees(){
+  if (!isAdmin) return;
+  const overlay = document.getElementById('modalOverlay');
+  const modal = document.getElementById('modal');
+  overlay.style.display = 'flex';
+  renderManageAssigneesContent(modal);
+}
+
+function renderManageAssigneesContent(modal){
+  const items = appData.assignees || [];
+  const list = items.length === 0
+    ? `<div class="assignee-manage-empty">Zatím žádní řešitelé. Přidej je níž.</div>`
+    : items.map(name => `
+        <div class="assignee-manage-item">
+          <span>${escH(name)}</span>
+          <button onclick="removeAssigneeFromList('${escAttr(name)}')" title="Odebrat">×</button>
+        </div>
+      `).join('');
+
+  modal.innerHTML = `<h2>👥 Správa řešitelů</h2>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:12px">
+      Seznam lidí, které lze přidělit jako řešitele úkolů.<br>
+      Při odebrání zůstanou ve stávajících úkolech jako historie.
+    </p>
+    <div class="assignee-manage-list">${list}</div>
+    <label>Přidat řešitele</label>
+    <div style="display:flex;gap:6px">
+      <input id="newAssigneeInput" type="text" placeholder="Jméno…" maxlength="60" autofocus style="margin-bottom:0">
+      <button class="btn btn-primary" onclick="addAssigneeToList()">+</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Zavřít</button>
+    </div>`;
+  setTimeout(()=>{
+    const inp = document.getElementById('newAssigneeInput');
+    if (inp) {
+      inp.focus();
+      inp.onkeydown = e => { if(e.key==='Enter') { e.preventDefault(); addAssigneeToList(); } };
+    }
+  }, 50);
+}
+
+async function addAssigneeToList(){
+  const inp = document.getElementById('newAssigneeInput');
+  const name = inp.value.trim();
+  if (!name) return;
+  const pw = sessionStorage.getItem('adminPw') || '';
+  try {
+    const r = await fetch('/api/assignees/add', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: pw, name })
+    });
+    const res = await r.json();
+    if (r.ok) {
+      appData.assignees = res.assignees;
+      inp.value = '';
+      renderManageAssigneesContent(document.getElementById('modal'));
+      renderTodos();
+    } else {
+      showToast(res.error || 'Chyba', true);
+    }
+  } catch(e) {
+    showToast('Síťová chyba', true);
+  }
+}
+
+async function removeAssigneeFromList(name){
+  if (!confirm(`Odebrat „${name}" ze seznamu?\n\nZůstane v historii úkolů, kde už je přiřazen.`)) return;
+  const pw = sessionStorage.getItem('adminPw') || '';
+  try {
+    const r = await fetch('/api/assignees/remove', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: pw, name })
+    });
+    const res = await r.json();
+    if (r.ok) {
+      appData.assignees = res.assignees;
+      renderManageAssigneesContent(document.getElementById('modal'));
+      renderTodos();
+    } else {
+      showToast(res.error || 'Chyba', true);
+    }
+  } catch(e) {
+    showToast('Síťová chyba', true);
+  }
 }
 
 async function toggleTodo(id){
