@@ -99,6 +99,8 @@
     text-align: left; padding-left: 14px;
     position: sticky; left: 0; z-index: 20; min-width: 130px;
   }
+  /* Širší sloupce dnů - vejde se poznámka vedle čtverečku */
+  thead th.day-col { min-width: 150px; }
   .day-weekend { background: #2a2824 !important; }
   .day-today { outline: 2px solid var(--accent); outline-offset: -2px; }
 
@@ -117,18 +119,18 @@
   }
   tbody tr:nth-child(even) td.worker-name { background: #f5f1ea; }
 
-  /* Cell - holds either single block or split AM/PM */
+  /* Cell - širší: barevný čtvereček vlevo + poznámka vpravo */
   .cell-wrap {
-    width: 50px; height: 46px;
-    display: flex; align-items: center; justify-content: center;
-    padding: 4px;
+    min-width: 150px; min-height: 46px;
+    display: flex; align-items: stretch; gap: 5px;
+    padding: 5px 6px;
   }
   .cell {
-    width: 42px; height: 38px;
+    width: 42px; min-width: 42px; height: 38px;
     border-radius: 5px; overflow: hidden;
     display: flex; user-select: none;
     transition: filter .1s, transform .1s;
-    background: #e0dcd4;
+    background: #e0dcd4; flex-shrink: 0;
   }
   .cell.editable { cursor: pointer; }
   .cell.editable:hover { filter: brightness(.88); transform: scale(1.05); }
@@ -144,6 +146,31 @@
   .cell.full .cell-half { font-size: 10px; }
 
   .cell-divider { width: 1px; background: rgba(255,255,255,.5); }
+
+  /* Textová poznámka vedle čtverečku */
+  .cell-note {
+    flex: 1; min-width: 0;
+    display: flex; align-items: center;
+    font-size: 10px; line-height: 1.25;
+    color: var(--ink); text-align: left;
+    overflow: hidden;
+    cursor: default;
+  }
+  .cell-note.editable { cursor: pointer; }
+  .cell-note-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+    width: 100%;
+  }
+  .cell-note.empty {
+    color: var(--line);
+    font-style: italic;
+  }
+  .cell-note.editable.empty:hover { color: var(--muted); }
+  .cell-note.editable:hover .cell-note-text { color: var(--accent); }
 
   /* Picker dropdown */
   .picker {
@@ -172,6 +199,40 @@
     border: 1px solid var(--ink); border-radius: 2px;
     background: linear-gradient(90deg, var(--accent) 50%, #2d6a4f 50%);
   }
+
+  /* Note editor popup */
+  .note-editor {
+    position: fixed; z-index: 420;
+    background: var(--white); border: 1px solid var(--ink);
+    border-radius: 6px; box-shadow: 4px 4px 0 var(--ink);
+    padding: 12px; width: 280px;
+    animation: popIn .12s ease;
+  }
+  .note-editor-label {
+    font-size: 11px; color: var(--muted); margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+  .note-editor textarea {
+    width: 100%; min-height: 70px; resize: vertical;
+    font-family: 'DM Mono', monospace; font-size: 12px;
+    border: 1px solid var(--line); border-radius: 4px;
+    padding: 7px 9px; background: var(--bg); color: var(--ink);
+    line-height: 1.4;
+  }
+  .note-editor textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .note-editor-foot {
+    display: flex; gap: 6px; margin-top: 8px; align-items: center;
+  }
+  .note-editor-foot .char-count {
+    font-size: 10px; color: var(--muted); margin-right: auto;
+  }
+  .note-editor-foot button {
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    padding: 4px 12px; border-radius: 3px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--white); color: var(--ink);
+  }
+  .note-editor-foot button:hover { border-color: var(--ink); }
+  .note-editor-foot button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 
   /* Summary row */
   .summary-row td {
@@ -553,26 +614,37 @@ function dateStr(d){
   return `${y}-${m}-${dd}`;
 }
 function addDays(d,n){ const r=new Date(d); r.setDate(r.getDate()+n); return r; }
-function escH(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escH(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // ─── DATA HELPERS ─────────────────────────────────────────
-// Migrate old format (single number) to new format ({am,pm})
+// Formát buňky: { am, pm, note }
+//  - am/pm: index stavby nebo null
+//  - note: textová poznámka na celý den, nebo '' / undefined
+// Starší formáty: číslo (celý den) nebo {am,pm} bez note
 function getCell(wi, dStr){
   const key = `${wi}_${dStr}`;
   const v = appData.assignments[key];
-  if (v === undefined || v === null) return { am: null, pm: null };
-  if (typeof v === 'number') return { am: v, pm: v }; // old format
-  return { am: v.am ?? null, pm: v.pm ?? null };
+  if (v === undefined || v === null) return { am: null, pm: null, note: '' };
+  if (typeof v === 'number') return { am: v, pm: v, note: '' }; // nejstarší formát
+  return {
+    am: v.am ?? null,
+    pm: v.pm ?? null,
+    note: typeof v.note === 'string' ? v.note : ''
+  };
 }
-function setCell(wi, dStr, am, pm){
+function setCell(wi, dStr, am, pm, note){
   const key = `${wi}_${dStr}`;
-  if (am === null && pm === null) {
+  const cleanNote = (typeof note === 'string') ? note.trim() : '';
+  const hasStavba = (am !== null && am !== undefined) || (pm !== null && pm !== undefined);
+  const hasNote = cleanNote.length > 0;
+  // Pokud buňka nemá nic (žádná stavba, žádná poznámka) -> smaž záznam
+  if (!hasStavba && !hasNote) {
     delete appData.assignments[key];
-  } else if (am === pm && am !== null) {
-    appData.assignments[key] = { am, pm }; // full day
-  } else {
-    appData.assignments[key] = { am, pm };
+    return;
   }
+  const obj = { am: am ?? null, pm: pm ?? null };
+  if (hasNote) obj.note = cleanNote;
+  appData.assignments[key] = obj;
 }
 
 // ─── LOAD ─────────────────────────────────────────────────
@@ -737,7 +809,7 @@ function render(){
   days.forEach(d=>{
     const isWe=d.getDay()===0||d.getDay()===6;
     const isToday=dateStr(d)===dateStr(today);
-    th+=`<th class="${isWe?'day-weekend':''} ${isToday?'day-today':''}">
+    th+=`<th class="day-col ${isWe?'day-weekend':''} ${isToday?'day-today':''}">
       ${DAYS_CS[d.getDay()]}<br><span style="font-size:10px;font-weight:400">${d.getDate()}.${d.getMonth()+1}</span></th>`;
   });
   th+=`</tr>`;
@@ -781,9 +853,19 @@ function render(){
         inner = renderHalf(cell.am) + `<div class="cell-divider"></div>` + renderHalf(cell.pm);
       }
 
+      // Textová poznámka vedle čtverečku
+      const note = cell.note || '';
+      const noteClass = `cell-note ${isAdmin?'editable':''} ${note?'':'empty'}`;
+      const noteOnclick = isAdmin ? `onclick="openNoteEditor(event,${wi},${di})"` : '';
+      const noteTitle = note ? `title="${escH(note)}"` : (isAdmin ? `title="Klikni pro přidání poznámky"` : '');
+      const noteContent = note
+        ? `<span class="cell-note-text">${escH(note)}</span>`
+        : (isAdmin ? `<span class="cell-note-text">+ pozn.</span>` : '');
+
       html+=`<td style="${isWe?'background:#edeae4':''}">
         <div class="cell-wrap">
           <div class="${cellClass}" ${onclick}>${inner}</div>
+          <div class="${noteClass}" ${noteOnclick} ${noteTitle}>${noteContent}</div>
         </div>
       </td>`;
     });
@@ -885,7 +967,8 @@ function openPicker(e, wi, di){
 
 function assignFull(wi, di, val){
   const dStr = dateStr(window._renderDays[di]);
-  setCell(wi, dStr, val, val);
+  const cell = getCell(wi, dStr);
+  setCell(wi, dStr, val, val, cell.note);
   closePicker();
   markUnsaved();
   render();
@@ -893,8 +976,8 @@ function assignFull(wi, di, val){
 function assignHalf(wi, di, half, val){
   const dStr = dateStr(window._renderDays[di]);
   const cell = getCell(wi, dStr);
-  if (half === 'am') setCell(wi, dStr, val, cell.pm);
-  else setCell(wi, dStr, cell.am, val);
+  if (half === 'am') setCell(wi, dStr, val, cell.pm, cell.note);
+  else setCell(wi, dStr, cell.am, val, cell.note);
   closePicker();
   markUnsaved();
   render();
@@ -906,11 +989,11 @@ function splitDay(wi, di){
   if (cell.am === null && cell.pm === null) {
     // Force split state by setting one half explicitly to first stavba
     if (appData.stavby.length > 0) {
-      setCell(wi, dStr, 0, null);
+      setCell(wi, dStr, 0, null, cell.note);
     }
   } else {
     // Force "split" view: nastav am=current, pm=null pokud byly stejné
-    setCell(wi, dStr, cell.am, null);
+    setCell(wi, dStr, cell.am, null, cell.note);
   }
   closePicker();
   markUnsaved();
@@ -933,6 +1016,91 @@ function closePicker(){ document.getElementById('picker').style.display = 'none'
 document.addEventListener('click', (e)=>{
   if (!e.target.closest('.picker') && !e.target.closest('.cell.editable')) {
     closePicker();
+  }
+});
+
+// ─── NOTE EDITOR ──────────────────────────────────────────
+function closeNoteEditor(){
+  const el = document.getElementById('noteEditor');
+  if (el) el.remove();
+}
+
+function openNoteEditor(e, wi, di){
+  e.stopPropagation();
+  if (!isAdmin) return;
+  closeNoteEditor();
+  closePicker();
+
+  const dStr = dateStr(window._renderDays[di]);
+  const cell = getCell(wi, dStr);
+  const workerName = appData.workers[wi] || '';
+
+  const editor = document.createElement('div');
+  editor.className = 'note-editor';
+  editor.id = 'noteEditor';
+  editor.innerHTML = `
+    <div class="note-editor-label">Poznámka — ${escH(workerName)}, ${DAYS_CS[window._renderDays[di].getDay()]} ${window._renderDays[di].getDate()}.${window._renderDays[di].getMonth()+1}.</div>
+    <textarea id="noteTextarea" maxlength="300" placeholder="např. štěrk na lišku / domluvit bagr…">${escH(cell.note || '')}</textarea>
+    <div class="note-editor-foot">
+      <span class="char-count" id="noteCharCount"></span>
+      <button onclick="closeNoteEditor()">Zrušit</button>
+      <button class="primary" onclick="saveNote(${wi},${di})">Uložit</button>
+    </div>
+  `;
+  document.body.appendChild(editor);
+
+  // Pozicování
+  const rect = e.currentTarget.getBoundingClientRect();
+  let top = rect.bottom + 6;
+  let left = rect.left;
+  const w = 280, h = 160;
+  if (left + w > window.innerWidth - 10) left = window.innerWidth - w - 10;
+  if (left < 10) left = 10;
+  if (top + h > window.innerHeight - 10) {
+    top = rect.top - h - 6;
+    if (top < 10) top = 10;
+  }
+  editor.style.top = top + 'px';
+  editor.style.left = left + 'px';
+
+  const ta = document.getElementById('noteTextarea');
+  const cc = document.getElementById('noteCharCount');
+  const updateCount = () => { cc.textContent = `${ta.value.length}/300`; };
+  updateCount();
+  ta.addEventListener('input', updateCount);
+  ta.focus();
+  // Kurzor na konec
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+
+  // Ctrl+Enter uloží, Esc zruší
+  ta.addEventListener('keydown', (ev)=>{
+    if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
+      ev.preventDefault();
+      saveNote(wi, di);
+    } else if (ev.key === 'Escape') {
+      closeNoteEditor();
+    }
+  });
+}
+
+function saveNote(wi, di){
+  const ta = document.getElementById('noteTextarea');
+  if (!ta) return;
+  const newNote = ta.value.trim();
+  const dStr = dateStr(window._renderDays[di]);
+  const cell = getCell(wi, dStr);
+  setCell(wi, dStr, cell.am, cell.pm, newNote);
+  closeNoteEditor();
+  markUnsaved();
+  render();
+}
+
+// Zavři note editor při kliknutí mimo
+document.addEventListener('click', (e)=>{
+  if (document.getElementById('noteEditor')
+      && !e.target.closest('#noteEditor')
+      && !e.target.closest('.cell-note.editable')) {
+    closeNoteEditor();
   }
 });
 
